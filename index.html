@@ -80,6 +80,20 @@
       <div id="pick-result" style="margin-top:16px;"></div>
     </section>
 
+    <section id="screen-discover" class="screen">
+      <div class="screen-title">Discover</div>
+
+      <div class="segmented" id="disc-type-row" style="max-width:220px;">
+        <div class="pill" id="disc-type-pill"></div>
+        <button id="disc-type-movie" class="active" onclick="setDiscoverType('movie')">Movies</button>
+        <button id="disc-type-tv" onclick="setDiscoverType('tv')">TV shows</button>
+      </div>
+
+      <div class="genre-chip-row" id="genre-chips"></div>
+
+      <div class="poster-grid" id="discover-grid"></div>
+    </section>
+
     <section id="screen-watched" class="screen">
       <div class="screen-title">Watched</div>
       <div class="stat-line" id="watched-stat"></div>
@@ -96,6 +110,10 @@
     <button class="nav-btn" id="navbtn-pick" onclick="showScreen('pick')">
       <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></span>
       <span class="label">Pick</span>
+    </button>
+    <button class="nav-btn" id="navbtn-discover" onclick="showScreen('discover')">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></span>
+      <span class="label">Discover</span>
     </button>
     <button class="nav-btn" id="navbtn-watched" onclick="showScreen('watched')">
       <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>

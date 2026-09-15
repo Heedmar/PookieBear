@@ -8,6 +8,18 @@ const TMDB_KEY = 'ff3f0aa181d0a133d77d627b1457b3ba';
 const TMDB_IMG_SMALL = 'https://image.tmdb.org/t/p/w92';
 const TMDB_IMG_MED = 'https://image.tmdb.org/t/p/w342';
 
+const DISCOVER_GENRES = [
+  { name: 'Action', movie: 28, tv: 10759 },
+  { name: 'Comedy', movie: 35, tv: 35 },
+  { name: 'Drama', movie: 18, tv: 18 },
+  { name: 'Animation', movie: 16, tv: 16 },
+  { name: 'Sci-Fi', movie: 878, tv: 10765 },
+  { name: 'Mystery', movie: 9648, tv: 9648 },
+  { name: 'Horror', movie: 27, tv: null },
+  { name: 'Romance', movie: 10749, tv: null },
+  { name: 'Documentary', movie: 99, tv: 99 }
+];
+
 let queued = [];
 let watched = [];
 let filterType = 'all';
@@ -18,6 +30,11 @@ let searchTimer = null;
 let lastSearchResults = [];
 let selectedPoster = null;
 let lastAddedId = null;
+
+let discoverType = 'movie';
+let discoverGenre = DISCOVER_GENRES[0].name;
+let discoverCache = {};
+let discoverAdded = {};
 
 function escapeHTML(str) {
   return String(str)
@@ -82,7 +99,7 @@ function applyStagger(containerEl) {
   });
 }
 
-// ---------- TMDB search ----------
+// ---------- TMDB title search (Add screen) ----------
 function onTitleInput() {
   selectedPoster = null;
   const q = document.getElementById('new-title').value.trim();
@@ -218,6 +235,16 @@ async function removeItem(id) {
   }
 }
 
+// Shared insert used by both the Add screen and Discover cards
+async function insertTitle(title, type, genre, posterUrl) {
+  const res = await sb.from('watchlist')
+    .insert([{ title: title, type: type, genre: genre || '', status: 'queued', poster_url: posterUrl || null }])
+    .select();
+  if (res.error) throw res.error;
+  if (res.data && res.data[0]) lastAddedId = res.data[0].id;
+  await refreshAll();
+}
+
 // ---------- Pick screen ----------
 function getFilteredQueue() {
   if (filterType === 'movie') return queued.filter(function (it) { return it.type === 'Movie'; });
@@ -351,9 +378,130 @@ function renderWatchedGrid() {
   applyStagger(el);
 }
 
+// ---------- Discover screen ----------
+function genreIdFor(name, type) {
+  const g = DISCOVER_GENRES.filter(function (x) { return x.name === name; })[0];
+  if (!g) return null;
+  return type === 'movie' ? g.movie : g.tv;
+}
+
+function renderGenreChips() {
+  const el = document.getElementById('genre-chips');
+  el.innerHTML = DISCOVER_GENRES.map(function (g) {
+    const id = discoverType === 'movie' ? g.movie : g.tv;
+    const disabled = id === null;
+    return '<button class="genre-chip' + (g.name === discoverGenre && !disabled ? ' active' : '') + (disabled ? ' disabled' : '') + '" '
+      + (disabled ? 'disabled' : 'onclick="selectGenre(\'' + g.name + '\')"') + '>' + g.name + '</button>';
+  }).join('');
+}
+
+function setDiscoverType(type) {
+  discoverType = type;
+  document.getElementById('disc-type-movie').classList.toggle('active', type === 'movie');
+  document.getElementById('disc-type-tv').classList.toggle('active', type === 'tv');
+  movePill('disc-type-pill', document.getElementById('disc-type-' + type), 'disc-type-row');
+  if (genreIdFor(discoverGenre, type) === null) {
+    const firstValid = DISCOVER_GENRES.filter(function (g) { return (type === 'movie' ? g.movie : g.tv) !== null; })[0];
+    discoverGenre = firstValid ? firstValid.name : discoverGenre;
+  }
+  renderGenreChips();
+  loadDiscover();
+}
+
+function selectGenre(name) {
+  discoverGenre = name;
+  renderGenreChips();
+  loadDiscover();
+}
+
+async function loadDiscover() {
+  const grid = document.getElementById('discover-grid');
+  const genreId = genreIdFor(discoverGenre, discoverType);
+  if (genreId === null) {
+    grid.innerHTML = '<div class="empty-note">No TV equivalent for this genre.</div>';
+    return;
+  }
+  const cacheKey = discoverType + '-' + genreId;
+  if (discoverCache[cacheKey]) {
+    renderDiscoverGrid(discoverCache[cacheKey]);
+    return;
+  }
+  grid.innerHTML = '<div class="empty-note">Loading\u2026</div>';
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const dateParam = discoverType === 'movie' ? 'primary_release_date' : 'first_air_date';
+    const sortField = discoverType === 'movie' ? 'primary_release_date' : 'first_air_date';
+    let results = [];
+    for (let page = 1; page <= 3; page++) {
+      const url = 'https://api.themoviedb.org/3/discover/' + discoverType
+        + '?api_key=' + TMDB_KEY
+        + '&with_genres=' + genreId
+        + '&sort_by=' + sortField + '.desc'
+        + '&vote_count.gte=50'
+        + '&' + dateParam + '.lte=' + today
+        + '&include_adult=false'
+        + '&page=' + page;
+      const res = await fetch(url);
+      const data = await res.json();
+      results = results.concat(data.results || []);
+      if (!data.results || data.results.length === 0) break;
+    }
+    results = results.slice(0, 50);
+    discoverCache[cacheKey] = results;
+    renderDiscoverGrid(results);
+  } catch (e) {
+    console.error(e);
+    grid.innerHTML = '<div class="empty-note">Could not load \u2014 check your connection.</div>';
+  }
+}
+
+function renderDiscoverGrid(results) {
+  const grid = document.getElementById('discover-grid');
+  if (!results.length) {
+    grid.innerHTML = '<div class="empty-note">Nothing found for this combination.</div>';
+    return;
+  }
+  grid.innerHTML = results.map(function (r, i) {
+    const title = discoverType === 'movie' ? r.title : r.name;
+    const dateStr = discoverType === 'movie' ? r.release_date : r.first_air_date;
+    const year = dateStr ? dateStr.slice(0, 4) : '';
+    const posterUrl = r.poster_path ? (TMDB_IMG_MED + r.poster_path) : '';
+    const artInner = r.poster_path
+      ? '<img src="' + TMDB_IMG_MED + r.poster_path + '" alt="" loading="lazy">'
+      : escapeHTML((title || '?').charAt(0).toUpperCase());
+    const artCls = discoverType === 'movie' ? 'movie' : 'show';
+    const cardKey = discoverType + '-' + r.id;
+    const added = !!discoverAdded[cardKey];
+    return '<div class="poster-card discoverable">'
+      + '<div class="poster-art ' + artCls + '">' + artInner
+      + '<button class="card-add-btn' + (added ? ' added' : '') + '" data-key="' + cardKey + '" '
+      + 'onclick=\'addFromDiscover(' + JSON.stringify({ title: title, year: year, poster: posterUrl }).replace(/'/g, '&#39;') + ', "' + cardKey + '")\' '
+      + (added ? 'disabled' : '') + ' aria-label="Add ' + escapeHTML(title || '') + '">'
+      + (added ? '\u2713' : '+') + '</button>'
+      + '</div>'
+      + '<div class="poster-stub"><div class="title">' + escapeHTML(title) + '</div>'
+      + '<div class="meta-sm">' + year + '</div></div>'
+      + '</div>';
+  }).join('');
+  applyStagger(grid);
+}
+
+async function addFromDiscover(data, cardKey) {
+  if (discoverAdded[cardKey]) return;
+  const type = cardKey.indexOf('movie-') === 0 ? 'Movie' : 'Show';
+  try {
+    await insertTitle(data.title, type, discoverGenre, data.poster || null);
+    discoverAdded[cardKey] = true;
+    const btn = document.querySelector('.card-add-btn[data-key="' + cardKey + '"]');
+    if (btn) { btn.classList.add('added'); btn.textContent = '\u2713'; btn.disabled = true; }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 // ---------- Nav ----------
 function showScreen(name) {
-  ['add', 'pick', 'watched'].forEach(function (s) {
+  ['add', 'pick', 'discover', 'watched'].forEach(function (s) {
     document.getElementById('screen-' + s).classList.toggle('active', s === name);
     document.getElementById('navbtn-' + s).classList.toggle('active', s === name);
   });
@@ -361,6 +509,15 @@ function showScreen(name) {
     requestAnimationFrame(function () {
       movePill('filter-pill', document.querySelector('#filter-row button[data-filter="' + filterType + '"]'), 'filter-row');
     });
+  }
+  if (name === 'discover') {
+    requestAnimationFrame(function () {
+      movePill('disc-type-pill', document.getElementById('disc-type-' + discoverType), 'disc-type-row');
+    });
+    if (!document.getElementById('genre-chips').children.length) {
+      renderGenreChips();
+      loadDiscover();
+    }
   }
   refreshAll();
 }
