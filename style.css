@@ -59,6 +59,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, .star:focus-vis
 .app-header {
   padding: calc(16px + var(--safe-top)) 20px 12px;
   flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
 }
 
 .wordmark {
@@ -70,6 +73,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, .star:focus-vis
 }
 
 .wordmark span { color: var(--gold); }
+
+.sync-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.sync-status.err { color: var(--danger); }
 
 /* Screens */
 .screens {
@@ -148,6 +157,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   transition: transform 0.1s ease, opacity 0.15s ease;
 }
 .btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.6; }
 
 .btn-primary {
   width: 100%;

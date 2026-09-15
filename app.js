@@ -1,39 +1,52 @@
-// ---------- Data layer ----------
-function loadQueued() {
-  try { return JSON.parse(localStorage.getItem('watchnext_queued') || '[]'); }
-  catch (e) { return []; }
-}
-function loadWatched() {
-  try { return JSON.parse(localStorage.getItem('watchnext_watched') || '[]'); }
-  catch (e) { return []; }
-}
-function saveQueued() {
-  try { localStorage.setItem('watchnext_queued', JSON.stringify(queued)); } catch (e) {}
-}
-function saveWatched() {
-  try { localStorage.setItem('watchnext_watched', JSON.stringify(watched)); } catch (e) {}
-}
-function genId() {
-  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-  return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-}
+// ---------- Supabase setup ----------
+const SUPABASE_URL = 'https://ekmdskkryigycmuepuhy.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ZAt00p4k-CvSLn6hpU2oLg_xCmYp5gD';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let queued = [];
+let watched = [];
+let filterType = 'all';
+let pendingRating = 0;
+let hoverRating = 0;
+let shuffleTimer = null;
+
 function escapeHTML(str) {
   return String(str)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-let queued = loadQueued();
-let watched = loadWatched();
-let filterType = 'all';
-let pendingRating = 0;
-let hoverRating = 0;
-let shuffleTimer = null;
+function setSyncStatus(state) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (state === 'syncing') { el.textContent = 'Syncing\u2026'; el.classList.remove('err'); }
+  else if (state === 'synced') { el.textContent = 'Synced'; el.classList.remove('err'); }
+  else if (state === 'error') { el.textContent = 'Sync failed \u2014 check connection'; el.classList.add('err'); }
+}
+
+// ---------- Data sync ----------
+async function refreshAll() {
+  setSyncStatus('syncing');
+  try {
+    const res = await sb.from('watchlist').select('*').order('created_at', { ascending: true });
+    if (res.error) throw res.error;
+    const rows = res.data || [];
+    queued = rows.filter(function (r) { return r.status !== 'watched'; });
+    watched = rows.filter(function (r) { return r.status === 'watched'; }).reverse();
+    setSyncStatus('synced');
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('error');
+  }
+  renderQueueRows();
+  renderPickGrid();
+  renderWatchedGrid();
+}
 
 // ---------- Small render helpers ----------
 function posterArtOnly(item) {
   const cls = item.type === 'Movie' ? 'movie' : 'show';
-  const letter = (item.title.trim().charAt(0) || '?').toUpperCase();
+  const letter = ((item.title || '').trim().charAt(0) || '?').toUpperCase();
   return '<div class="poster-art ' + cls + '">' + escapeHTML(letter) + '</div>';
 }
 function posterCardHTML(item, extra) {
@@ -60,34 +73,51 @@ function renderQueueRows() {
       + '<div class="tag-bar ' + (it.type === 'Movie' ? 'movie' : 'show') + '"></div>'
       + '<div class="info"><div class="title">' + escapeHTML(it.title) + '</div>'
       + '<div class="meta">' + (it.type === 'Movie' ? 'Movie' : 'TV show') + (it.genre ? ' \u00b7 ' + escapeHTML(it.genre) : '') + '</div></div>'
-      + '<button class="icon-btn" aria-label="Remove ' + escapeHTML(it.title) + '" onclick="removeItem(\'' + it.id + '\')">'
+      + '<button class="icon-btn" aria-label="Remove ' + escapeHTML(it.title) + '" onclick="removeItem(' + it.id + ')">'
       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>'
       + '</button></div>';
   }).join('');
 }
 
-function addItem() {
+async function addItem() {
   const titleEl = document.getElementById('new-title');
   const title = titleEl.value.trim();
   const errEl = document.getElementById('add-error');
-  if (!title) { errEl.classList.add('show'); return; }
+  if (!title) {
+    errEl.textContent = 'Enter a title first.';
+    errEl.classList.add('show');
+    return;
+  }
   errEl.classList.remove('show');
   const type = document.getElementById('new-type').value;
   const genre = document.getElementById('new-genre').value.trim();
-  queued.push({ id: genId(), title: title, type: type, genre: genre });
-  saveQueued();
-  titleEl.value = '';
-  document.getElementById('new-genre').value = '';
-  titleEl.focus();
-  renderQueueRows();
-  renderPickGrid();
+  const btn = document.getElementById('add-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await sb.from('watchlist').insert([{ title: title, type: type, genre: genre, status: 'queued' }]);
+    if (res.error) throw res.error;
+    titleEl.value = '';
+    document.getElementById('new-genre').value = '';
+    titleEl.focus();
+    await refreshAll();
+  } catch (e) {
+    console.error(e);
+    errEl.textContent = 'Could not add \u2014 check your connection.';
+    errEl.classList.add('show');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
-function removeItem(id) {
-  queued = queued.filter(function (it) { return it.id !== id; });
-  saveQueued();
-  renderQueueRows();
-  renderPickGrid();
+async function removeItem(id) {
+  try {
+    const res = await sb.from('watchlist').delete().eq('id', id);
+    if (res.error) throw res.error;
+    await refreshAll();
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('error');
+  }
 }
 
 // ---------- Pick screen ----------
@@ -161,7 +191,7 @@ function showFinalPick(choice) {
     '<div class="star-picker" id="star-picker-inner"></div>',
     '<div class="reveal-actions">',
     '<button class="btn btn-secondary" onclick="pickOne()">Reroll</button>',
-    '<button class="btn btn-primary" onclick="markWatched(\'' + choice.id + '\')">Mark watched</button>',
+    '<button class="btn btn-primary" onclick="markWatched(' + choice.id + ')">Mark watched</button>',
     '</div>',
     '</div>',
     '</div>'
@@ -172,30 +202,37 @@ function showFinalPick(choice) {
 function renderStarPicker() {
   const el = document.getElementById('star-picker-inner');
   if (!el) return;
-  const active = hoverRating > 0 ? hoverRating : pendingRating;
   let html = '';
   for (let i = 1; i <= 5; i++) {
-    html += '<span class="star' + (i <= active ? ' on' : '') + '" '
+    html += '<span class="star" data-val="' + i + '" '
       + 'onmouseenter="previewRating(' + i + ')" onmouseleave="previewRating(0)" onclick="setPendingRating(' + i + ')" '
       + 'role="button" tabindex="0" aria-label="Rate ' + i + ' out of 5">\u2605</span>';
   }
   el.innerHTML = html;
+  updateStarDisplay();
 }
-function previewRating(n) { hoverRating = n; renderStarPicker(); }
-function setPendingRating(n) { pendingRating = n; hoverRating = 0; renderStarPicker(); }
+function updateStarDisplay() {
+  const el = document.getElementById('star-picker-inner');
+  if (!el) return;
+  const active = hoverRating > 0 ? hoverRating : pendingRating;
+  el.querySelectorAll('.star').forEach(function (node) {
+    node.classList.toggle('on', parseInt(node.dataset.val, 10) <= active);
+  });
+}
+function previewRating(n) { hoverRating = n; updateStarDisplay(); }
+function setPendingRating(n) { pendingRating = n; hoverRating = 0; updateStarDisplay(); }
 
-function markWatched(id) {
-  const idx = queued.findIndex(function (it) { return it.id === id; });
-  if (idx === -1) return;
-  const item = queued[idx];
-  queued.splice(idx, 1);
-  watched.unshift({ id: item.id, title: item.title, type: item.type, genre: item.genre, rating: pendingRating || 3 });
-  saveQueued();
-  saveWatched();
-  renderQueueRows();
-  renderPickGrid();
-  renderWatchedGrid();
-  document.getElementById('pick-result').innerHTML = '<div class="empty-note">Saved to watched.</div>';
+async function markWatched(id) {
+  const rating = pendingRating || 3;
+  try {
+    const res = await sb.from('watchlist').update({ status: 'watched', rating: rating }).eq('id', id);
+    if (res.error) throw res.error;
+    document.getElementById('pick-result').innerHTML = '<div class="empty-note">Saved to watched.</div>';
+    await refreshAll();
+  } catch (e) {
+    console.error(e);
+    document.getElementById('pick-result').innerHTML = '<div class="empty-note">Could not save \u2014 check your connection.</div>';
+  }
 }
 
 // ---------- Watched screen ----------
@@ -207,7 +244,7 @@ function renderWatchedGrid() {
     statEl.textContent = '';
     return;
   }
-  const avg = watched.reduce(function (s, i) { return s + i.rating; }, 0) / watched.length;
+  const avg = watched.reduce(function (s, i) { return s + (i.rating || 0); }, 0) / watched.length;
   statEl.textContent = watched.length + ' watched \u00b7 average ' + avg.toFixed(1) + ' stars';
   el.innerHTML = watched.map(function (it) {
     return posterCardHTML(it, '<div class="stars">' + starsHTML(it.rating) + '</div>');
@@ -225,18 +262,16 @@ function showScreen(name) {
       movePill('filter-pill', document.querySelector('#filter-row button[data-filter="' + filterType + '"]'), 'filter-row');
     });
   }
+  refreshAll();
 }
 
-window.addEventListener('resize', function () {
-  if (document.getElementById('screen-pick').classList.contains('active')) {
-    movePill('filter-pill', document.querySelector('#filter-row button[data-filter="' + filterType + '"]'), 'filter-row');
-  }
+window.addEventListener('focus', refreshAll);
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) refreshAll();
 });
 
 // ---------- Init ----------
-renderQueueRows();
-renderPickGrid();
-renderWatchedGrid();
+refreshAll();
 
 const titleInput = document.getElementById('new-title');
 if (titleInput) {

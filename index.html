@@ -18,6 +18,7 @@
 
   <header class="app-header">
     <div class="wordmark">Watch<span>&middot;</span>Next</div>
+    <div class="sync-status" id="sync-status">Syncing&hellip;</div>
   </header>
 
   <main class="screens">
@@ -45,7 +46,7 @@
       </div>
 
       <div class="error-text" id="add-error">Enter a title first.</div>
-      <button class="btn btn-primary" onclick="addItem()">Add to queue</button>
+      <button class="btn btn-primary" id="add-btn" onclick="addItem()">Add to queue</button>
 
       <div class="queue-list">
         <div class="queue-heading">In the queue</div>
@@ -99,6 +100,7 @@
   </nav>
 
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js" defer></script>
 </body>
 </html>
