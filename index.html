@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watch Next</title>
+<meta name="theme-color" content="#14161C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Watch Next">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <div class="wordmark">Watch<span>&middot;</span>Next</div>
+  </header>
+
+  <main class="screens">
+
+    <section id="screen-add" class="screen active">
+      <div class="screen-title">Add something</div>
+
+      <div class="field">
+        <label for="new-title">Title</label>
+        <input type="text" id="new-title" placeholder="e.g. Past Lives" autocomplete="off">
+      </div>
+
+      <div class="row-2" style="margin-bottom:12px;">
+        <div class="field" style="margin-bottom:0;">
+          <label for="new-type">Type</label>
+          <select id="new-type">
+            <option value="Movie">Movie</option>
+            <option value="Show">TV show</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="new-genre">Genre (optional)</label>
+          <input type="text" id="new-genre" placeholder="e.g. Thriller" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="error-text" id="add-error">Enter a title first.</div>
+      <button class="btn btn-primary" onclick="addItem()">Add to queue</button>
+
+      <div class="queue-list">
+        <div class="queue-heading">In the queue</div>
+        <div id="queue-rows"></div>
+      </div>
+    </section>
+
+    <section id="screen-pick" class="screen">
+      <div class="screen-title">Pick something</div>
+
+      <div class="segmented" id="filter-row">
+        <div class="pill" id="filter-pill"></div>
+        <button data-filter="all" class="active" onclick="setFilter('all')">All</button>
+        <button data-filter="movie" onclick="setFilter('movie')">Movies</button>
+        <button data-filter="show" onclick="setFilter('show')">TV shows</button>
+      </div>
+
+      <div class="poster-grid" id="pick-grid"></div>
+
+      <button class="btn btn-primary" onclick="pickOne()">
+        <span style="display:inline-flex; align-items:center; gap:8px; justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          Pick for us
+        </span>
+      </button>
+
+      <div id="pick-result" style="margin-top:16px;"></div>
+    </section>
+
+    <section id="screen-watched" class="screen">
+      <div class="screen-title">Watched</div>
+      <div class="stat-line" id="watched-stat"></div>
+      <div class="poster-grid" id="watched-grid"></div>
+    </section>
+
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="navbtn-add" onclick="showScreen('add')">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+      <span class="label">Add</span>
+    </button>
+    <button class="nav-btn" id="navbtn-pick" onclick="showScreen('pick')">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></span>
+      <span class="label">Pick</span>
+    </button>
+    <button class="nav-btn" id="navbtn-watched" onclick="showScreen('watched')">
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>
+      <span class="label">Watched</span>
+    </button>
+  </nav>
+
+</div>
+<script src="app.js" defer></script>
+</body>
+</html>
