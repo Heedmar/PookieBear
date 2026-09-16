@@ -35,19 +35,12 @@
         <div class="suggestions" id="title-suggestions"></div>
       </div>
 
-      <div class="row-2" style="margin-bottom:12px;">
-        <div class="field" style="margin-bottom:0;">
-          <label for="new-type">Type</label>
-          <select id="new-type">
-            <option value="Movie">Movie</option>
-            <option value="Show">TV show</option>
-          </select>
-        </div>
-        <div class="field" style="margin-bottom:0;">
-          <label for="new-genre">Genre (optional)</label>
-          <input type="text" id="new-genre" placeholder="e.g. Thriller" autocomplete="off">
-        </div>
+      <div class="field">
+        <label for="new-genre">Genre (optional)</label>
+        <input type="text" id="new-genre" placeholder="e.g. Thriller" autocomplete="off">
       </div>
+
+      <div class="screen-sub" style="margin:-6px 0 14px;">Pick a search result above and we'll tag it as a movie or TV show automatically. Typing your own title without picking one still works &mdash; we'll do our best guess.</div>
 
       <div class="error-text" id="add-error">Enter a title first.</div>
       <button class="btn btn-primary" id="add-btn" onclick="addItem()">Add to queue</button>

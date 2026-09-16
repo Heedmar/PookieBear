@@ -29,10 +29,11 @@ let shuffleTimer = null;
 let searchTimer = null;
 let lastSearchResults = [];
 let selectedPoster = null;
+let selectedType = null;
 let lastAddedId = null;
 
 let discoverType = 'movie';
-let discoverGenre = DISCOVER_GENRES[0].name;
+let discoverGenre = 'All';
 let discoverCache = {};
 let discoverAdded = {};
 
@@ -102,6 +103,7 @@ function applyStagger(containerEl) {
 // ---------- TMDB title search (Add screen) ----------
 function onTitleInput() {
   selectedPoster = null;
+  selectedType = null;
   const q = document.getElementById('new-title').value.trim();
   clearTimeout(searchTimer);
   if (q.length < 2) { hideSuggestions(); return; }
@@ -158,9 +160,31 @@ function hideSuggestions() {
 function pickSuggestion(r) {
   const title = r.media_type === 'movie' ? r.title : r.name;
   document.getElementById('new-title').value = title;
-  document.getElementById('new-type').value = r.media_type === 'movie' ? 'Movie' : 'Show';
+  selectedType = r.media_type === 'movie' ? 'Movie' : 'Show';
   selectedPoster = r.poster_path ? (TMDB_IMG_MED + r.poster_path) : null;
   hideSuggestions();
+}
+
+// Used when the user adds a freeform title without picking a search suggestion.
+async function guessTypeAndPoster(title) {
+  try {
+    const url = 'https://api.themoviedb.org/3/search/multi?api_key=' + TMDB_KEY
+      + '&query=' + encodeURIComponent(title) + '&include_adult=false';
+    const res = await fetch(url);
+    const data = await res.json();
+    const top = (data.results || []).filter(function (r) {
+      return r.media_type === 'movie' || r.media_type === 'tv';
+    })[0];
+    if (top) {
+      return {
+        type: top.media_type === 'movie' ? 'Movie' : 'Show',
+        poster: top.poster_path ? (TMDB_IMG_MED + top.poster_path) : null
+      };
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return { type: 'Movie', poster: null };
 }
 
 document.addEventListener('click', function (ev) {
@@ -198,12 +222,17 @@ async function addItem() {
     return;
   }
   errEl.classList.remove('show');
-  const type = document.getElementById('new-type').value;
   const genre = document.getElementById('new-genre').value.trim();
-  const posterToSave = selectedPoster;
   const btn = document.getElementById('add-btn');
   if (btn) btn.disabled = true;
   try {
+    let type = selectedType;
+    let posterToSave = selectedPoster;
+    if (!type) {
+      const guess = await guessTypeAndPoster(title);
+      type = guess.type;
+      posterToSave = guess.poster;
+    }
     const res = await sb.from('watchlist')
       .insert([{ title: title, type: type, genre: genre, status: 'queued', poster_url: posterToSave }])
       .select();
@@ -212,6 +241,7 @@ async function addItem() {
     titleEl.value = '';
     document.getElementById('new-genre').value = '';
     selectedPoster = null;
+    selectedType = null;
     hideSuggestions();
     titleEl.focus();
     await refreshAll();
@@ -380,6 +410,7 @@ function renderWatchedGrid() {
 
 // ---------- Discover screen ----------
 function genreIdFor(name, type) {
+  if (name === 'All') return 'all';
   const g = DISCOVER_GENRES.filter(function (x) { return x.name === name; })[0];
   if (!g) return null;
   return type === 'movie' ? g.movie : g.tv;
@@ -387,12 +418,14 @@ function genreIdFor(name, type) {
 
 function renderGenreChips() {
   const el = document.getElementById('genre-chips');
-  el.innerHTML = DISCOVER_GENRES.map(function (g) {
+  const allChip = '<button class="genre-chip' + (discoverGenre === 'All' ? ' active' : '') + '" onclick="selectGenre(\'All\')">All</button>';
+  const rest = DISCOVER_GENRES.map(function (g) {
     const id = discoverType === 'movie' ? g.movie : g.tv;
     const disabled = id === null;
     return '<button class="genre-chip' + (g.name === discoverGenre && !disabled ? ' active' : '') + (disabled ? ' disabled' : '') + '" '
       + (disabled ? 'disabled' : 'onclick="selectGenre(\'' + g.name + '\')"') + '>' + g.name + '</button>';
   }).join('');
+  el.innerHTML = allChip + rest;
 }
 
 function setDiscoverType(type) {
@@ -400,9 +433,8 @@ function setDiscoverType(type) {
   document.getElementById('disc-type-movie').classList.toggle('active', type === 'movie');
   document.getElementById('disc-type-tv').classList.toggle('active', type === 'tv');
   movePill('disc-type-pill', document.getElementById('disc-type-' + type), 'disc-type-row');
-  if (genreIdFor(discoverGenre, type) === null) {
-    const firstValid = DISCOVER_GENRES.filter(function (g) { return (type === 'movie' ? g.movie : g.tv) !== null; })[0];
-    discoverGenre = firstValid ? firstValid.name : discoverGenre;
+  if (discoverGenre !== 'All' && genreIdFor(discoverGenre, type) === null) {
+    discoverGenre = 'All';
   }
   renderGenreChips();
   loadDiscover();
@@ -435,7 +467,7 @@ async function loadDiscover() {
     for (let page = 1; page <= 3; page++) {
       const url = 'https://api.themoviedb.org/3/discover/' + discoverType
         + '?api_key=' + TMDB_KEY
-        + '&with_genres=' + genreId
+        + (genreId !== 'all' ? '&with_genres=' + genreId : '')
         + '&sort_by=' + sortField + '.desc'
         + '&vote_count.gte=50'
         + '&' + dateParam + '.lte=' + today
