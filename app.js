@@ -81,8 +81,10 @@ function posterArtOnly(item, sizeClass) {
   const letter = ((item.title || '').trim().charAt(0) || '?').toUpperCase();
   return '<div class="poster-art ' + cls + (sizeClass ? ' ' + sizeClass : '') + '">' + escapeHTML(letter) + '</div>';
 }
-function posterCardHTML(item, extra) {
-  return '<div class="poster-card">'
+function posterCardHTML(item, extra, clickable) {
+  const clickAttr = clickable ? ' onclick="pickSpecific(' + item.id + ')"' : '';
+  const clickClass = clickable ? ' pickable' : '';
+  return '<div class="poster-card' + clickClass + '"' + clickAttr + '>'
     + posterArtOnly(item)
     + '<div class="poster-stub"><div class="title">' + escapeHTML(item.title) + '</div>' + (extra || '') + '</div>'
     + '</div>';
@@ -286,7 +288,7 @@ function renderPickGrid() {
   const el = document.getElementById('pick-grid');
   const list = getFilteredQueue();
   el.innerHTML = list.length
-    ? list.map(function (it) { return posterCardHTML(it); }).join('')
+    ? list.map(function (it) { return posterCardHTML(it, null, true); }).join('')
     : '<div class="empty-note">Nothing in this category yet.</div>';
   applyStagger(el);
 }
@@ -308,6 +310,14 @@ function setFilter(val) {
   });
   movePill('filter-pill', document.querySelector('#filter-row button[data-filter="' + val + '"]'), 'filter-row');
   renderPickGrid();
+}
+
+function pickSpecific(id) {
+  const item = queued.filter(function (it) { return it.id === id; })[0];
+  if (!item) return;
+  if (shuffleTimer) clearInterval(shuffleTimer);
+  showFinalPick(item);
+  document.getElementById('pick-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function pickOne() {

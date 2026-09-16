@@ -374,6 +374,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   opacity: 0;
 }
 .poster-card:active { transform: scale(0.97); }
+.poster-card.pickable { cursor: pointer; }
 
 @keyframes cardIn {
   from { opacity: 0; transform: translateY(10px); }
